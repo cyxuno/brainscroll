@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scroll to learn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#0E1330; --chalk:#F7F6F2; }
+  * { box-sizing:border-box; margin:0; }
+  html, body { height:100%; background:var(--ink); color:var(--ink); font-family:'Bricolage Grotesque', system-ui, sans-serif; }
+
+  #bar { position:fixed; top:max(12px, env(safe-area-inset-top)); left:50%; transform:translateX(-50%); z-index:5;
+         display:flex; gap:16px; align-items:center; padding:8px 16px; border-radius:999px; background:var(--ink); color:var(--chalk);
+         font-size:14px; font-weight:700; white-space:nowrap; }
+  #bar span b { font-weight:800; }
+  #topicsBtn { all:unset; cursor:pointer; font-weight:800; padding:4px 10px; border-radius:999px; box-shadow:inset 0 0 0 2px var(--chalk); }
+  #topicsBtn:focus-visible { outline:3px solid var(--chalk); outline-offset:3px; }
+
+  #feed { height:100dvh; overflow-y:scroll; scroll-snap-type:y mandatory; overscroll-behavior:contain; }
+  .card { height:100dvh; display:flex; flex-direction:column; justify-content:center;
+          padding:72px 28px 40px; max-width:720px; margin:0 auto; width:100%; }
+  .bg { position:absolute; inset:0; z-index:-1; }
+
+  .wrap { position:relative; isolation:isolate; scroll-snap-align:start; height:100dvh; }
+  [data-deck=words]    { --bg:#3B5BFF; --fg:#fff; }
+  [data-deck=thinking] { --bg:#FFC53D; --fg:var(--ink); }
+  [data-deck=money]    { --bg:#2DD4A0; --fg:var(--ink); }
+  [data-deck=body]     { --bg:#FF5C8A; --fg:var(--ink); }
+  .wrap .bg { background:var(--bg); }
+  .wrap { color:var(--fg); }
+
+  .deck { font-weight:700; font-size:15px; margin-bottom:20px; opacity:.8; }
+  .face { all:unset; cursor:pointer; display:block; font-size:clamp(34px, 9vw, 68px); line-height:1.05;
+          font-weight:800; letter-spacing:-.02em; }
+  .face:focus-visible, .btn:focus-visible { outline:3px solid currentColor; outline-offset:6px; }
+  .hint { margin-top:24px; font-size:16px; opacity:.75; }
+  .back { margin-top:28px; font-size:clamp(20px, 5vw, 28px); line-height:1.3; max-width:30ch; display:none; }
+  .actions { margin-top:32px; display:none; gap:12px; }
+  .wrap.open .back { display:block; }
+  .wrap.open .actions { display:flex; }
+  .wrap.open .hint { display:none; }
+  .btn { all:unset; cursor:pointer; padding:14px 22px; border-radius:14px; font-weight:800; font-size:17px;
+         background:var(--fg); color:var(--bg); }
+  .btn.ghost { background:transparent; color:var(--fg); box-shadow:inset 0 0 0 2px var(--fg); }
+  .wrap.done .actions { opacity:.4; pointer-events:none; }
+  .msg { color:var(--chalk); padding:120px 28px; font-size:22px; max-width:32ch; margin:0 auto; line-height:1.3; }
+
+  #bar[hidden] { display:none; }
+
+  /* activities */
+  .q { font-size:clamp(30px, 7.5vw, 52px); line-height:1.08; font-weight:800; letter-spacing:-.02em; }
+  .opts { margin-top:24px; display:flex; flex-direction:column; gap:10px; }
+  .opt { all:unset; cursor:pointer; padding:14px 18px; border-radius:14px; font-size:19px; font-weight:700; box-shadow:inset 0 0 0 2px var(--fg); }
+  .opt:disabled { cursor:default; }
+  .opt:focus-visible { outline:3px solid currentColor; outline-offset:4px; }
+  .opt.right { background:var(--fg); color:var(--bg); }
+  .opt.right::before { content:'✓ '; }
+  .opt.wrong { opacity:.6; text-decoration:line-through; }
+  .opt.wrong::before { content:'✗ '; }
+  .ans { display:block; width:100%; margin-top:24px; padding:14px 16px; border-radius:14px; border:0; background:transparent;
+         color:var(--fg); font:inherit; font-size:20px; line-height:1.35; box-shadow:inset 0 0 0 2px var(--fg); resize:none; }
+  .ans::placeholder { color:var(--fg); opacity:.6; }
+  .ans:focus-visible { outline:3px solid currentColor; outline-offset:4px; }
+  .row { margin-top:16px; display:flex; }
+
+  /* topic picker */
+  #picker { position:fixed; inset:0; z-index:10; background:var(--ink); color:var(--chalk); overflow-y:auto; }
+  #picker .box { max-width:560px; margin:0 auto; padding:max(48px, env(safe-area-inset-top)) 24px 40px; display:flex; flex-direction:column; gap:14px; }
+  #picker h1 { font-size:clamp(34px, 8vw, 52px); line-height:1.05; letter-spacing:-.02em; font-weight:800; }
+  #picker .sub { opacity:.75; font-size:17px; margin-bottom:10px; }
+  .chip { all:unset; cursor:pointer; display:flex; flex-direction:column; gap:4px; padding:18px 20px; border-radius:18px;
+          color:var(--bg); box-shadow:inset 0 0 0 2px var(--bg); }
+  .chip strong { font-size:24px; font-weight:800; }
+  .chip span { font-size:16px; opacity:.85; }
+  .chip[aria-pressed=true] { background:var(--bg); color:var(--fg); }
+  .chip[aria-pressed=true] strong::after { content:' ✓'; }
+  .chip:focus-visible, .go:focus-visible { outline:3px solid var(--chalk); outline-offset:4px; }
+  .go { all:unset; cursor:pointer; margin-top:10px; text-align:center; padding:16px; border-radius:16px; font-size:19px; font-weight:800;
+        background:var(--chalk); color:var(--ink); }
+  .go:disabled { opacity:.35; cursor:not-allowed; }
+</style>
+</head>
+<body>
+<div id="bar" hidden>
+  <span>Today <b id="today">0</b></span>
+  <span>Learned <b id="learned">0</b></span>
+  <button id="topicsBtn" type="button">Topics</button>
+</div>
+<main id="feed"><p class="msg">Loading your feed…</p></main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+  // 1. Paste your project values (Supabase → Project Settings → API).
+  const SUPABASE_URL = 'https://qxmerdgowzauhdlzlorb.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_cjYqNNTY8JjWh0xIgooe4Q_mqyaez8w';
+
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const feed = document.getElementById('feed');
+
+  // To add a topic: add it here, add a color rule in the CSS, and add cards with that deck name.
+  const TOPICS = {
+    words:    { name: 'Words',    blurb: 'Rare and useful vocabulary' },
+    thinking: { name: 'Thinking', blurb: 'Mental models and common biases' },
+    money:    { name: 'Money',    blurb: 'Simple rules for saving and growing' },
+    body:     { name: 'Body',     blurb: 'Small habits for eyes, breath and posture' }
+  };
+
+  let pool = [];
+  let selected = new Set();
+  const mastered = new Set();
+  let todayCount = 0;
+
+  const shuffle = a => { a = [...a]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text) n.textContent = text; return n; };
+  const say = text => { feed.replaceChildren(el('p', 'msg', text)); };
+
+  function updateStats() {
+    document.getElementById('today').textContent = todayCount;
+    document.getElementById('learned').textContent = [...mastered].filter(id => pool.some(c => c.id === id && selected.has(c.deck))).length;
+  }
+
+  async function record(card, gotIt, wrap, { response = null, advance = true } = {}) {
+    if (advance) wrap.classList.add('done');
+    todayCount++;
+    if (gotIt) mastered.add(card.id);
+    updateStats();
+    const { error } = await sb.from('reviews').insert({ card_id: card.id, got_it: gotIt, response });
+    if (error) console.error(error.message);
+    if (advance) wrap.nextElementSibling?.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function buildFlip(card) {
+    const wrap = el('section', 'wrap'); wrap.dataset.deck = card.deck;
+    wrap.append(el('div', 'bg'));
+    const inner = el('div', 'card');
+    const face = el('button', 'face', card.front); face.type = 'button';
+    const hint = el('p', 'hint', 'Tap to reveal');
+    const back = el('p', 'back', card.back);
+    const actions = el('div', 'actions');
+    const yes = el('button', 'btn', 'Got it'); yes.type = 'button';
+    const no = el('button', 'btn ghost', 'Show again'); no.type = 'button';
+    face.onclick = () => wrap.classList.add('open');
+    yes.onclick = () => record(card, true, wrap);
+    no.onclick = () => record(card, false, wrap);
+    actions.append(yes, no);
+    inner.append(el('p', 'deck', TOPICS[card.deck]?.name || card.deck), face, hint, back, actions);
+    wrap.append(inner);
+    return wrap;
+  }
+
+  const KIND_LABEL = { quiz: ' quiz', recall: ' recall', reflect: ' reflection' };
+
+  function shell(card) {
+    const wrap = el('section', 'wrap'); wrap.dataset.deck = card.deck;
+    wrap.append(el('div', 'bg'));
+    const inner = el('div', 'card');
+    inner.append(el('p', 'deck', (TOPICS[card.deck]?.name || card.deck) + (KIND_LABEL[card.kind] || '')));
+    wrap.append(inner);
+    return { wrap, inner };
+  }
+
+  function nextRow(wrap) {
+    const row = el('div', 'actions');
+    const b = el('button', 'btn', 'Next'); b.type = 'button';
+    b.onclick = () => wrap.nextElementSibling?.scrollIntoView({ behavior: 'smooth' });
+    row.append(b);
+    return row;
+  }
+
+  // Quiz: pick an answer, see right/wrong straight away.
+  function buildQuiz(card) {
+    const { wrap, inner } = shell(card);
+    const opts = el('div', 'opts');
+    const back = el('p', 'back', 'Answer: ' + card.back);
+    for (const text of shuffle(card.options || [card.back])) {
+      const b = el('button', 'opt', text); b.type = 'button';
+      b.onclick = () => {
+        const ok = text === card.back;
+        opts.querySelectorAll('button').forEach(x => { x.disabled = true; if (x.textContent === card.back) x.classList.add('right'); });
+        if (!ok) b.classList.add('wrong');
+        wrap.classList.add('open');
+        record(card, ok, wrap, { advance: false });
+      };
+      opts.append(b);
+    }
+    inner.append(el('h2', 'q', card.front), opts, back, nextRow(wrap));
+    return wrap;
+  }
+
+  // Recall: commit to your own answer before seeing the real one.
+  function buildRecall(card) {
+    const { wrap, inner } = shell(card);
+    const input = el('textarea', 'ans'); input.rows = 2; input.placeholder = 'Type your best answer first…';
+    const checkRow = el('div', 'row');
+    const check = el('button', 'btn', 'Check'); check.type = 'button';
+    const back = el('p', 'back', 'Answer: ' + card.back);
+    const actions = el('div', 'actions');
+    const yes = el('button', 'btn', 'Got it'); yes.type = 'button';
+    const no = el('button', 'btn ghost', 'Show again'); no.type = 'button';
+    check.onclick = () => { input.readOnly = true; checkRow.style.display = 'none'; wrap.classList.add('open'); };
+    yes.onclick = () => record(card, true, wrap, { response: input.value.trim() });
+    no.onclick = () => record(card, false, wrap, { response: input.value.trim() });
+    checkRow.append(check);
+    actions.append(yes, no);
+    inner.append(el('h2', 'q', card.front), input, checkRow, back, actions);
+    return wrap;
+  }
+
+  // Reflect: open question. You have to write something to move on.
+  function buildReflect(card) {
+    const { wrap, inner } = shell(card);
+    const input = el('textarea', 'ans'); input.rows = 4; input.placeholder = 'Write a sentence or two…';
+    const row = el('div', 'row');
+    const save = el('button', 'btn', 'Save thought'); save.type = 'button';
+    const back = el('p', 'back', card.back);
+    save.onclick = () => {
+      const text = input.value.trim();
+      if (!text) { input.focus(); return; }
+      input.readOnly = true; row.style.display = 'none'; wrap.classList.add('open');
+      record(card, true, wrap, { response: text, advance: false });
+    };
+    row.append(save);
+    inner.append(el('h2', 'q', card.front), input, row, back, nextRow(wrap));
+    return wrap;
+  }
+
+  function buildCard(card) {
+    const builders = { quiz: buildQuiz, recall: buildRecall, reflect: buildReflect };
+    return (builders[card.kind] || buildFlip)(card);
+  }
+
+  function appendBatch() {
+    const left = pool.filter(c => selected.has(c.deck) && !mastered.has(c.id));
+    if (!left.length) {
+      feed.append(el('p', 'msg', 'You’ve learned every card in your topics. Pick more topics, or add rows to the cards table.'));
+      return;
+    }
+    const batch = shuffle(left).map(buildCard);
+    feed.append(...batch);
+    watchLast(batch[batch.length - 1]);
+  }
+
+  function watchLast(node) {
+    const io = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) { io.disconnect(); appendBatch(); }
+    }, { root: feed, threshold: 0.6 });
+    io.observe(node);
+  }
+
+  function startFeed() {
+    feed.replaceChildren();
+    feed.scrollTop = 0;
+    updateStats();
+    appendBatch();
+  }
+
+  async function saveTopics() {
+    const del = await sb.from('user_topics').delete().in('deck', Object.keys(TOPICS));
+    if (del.error) return console.error(del.error.message);
+    const ins = await sb.from('user_topics').insert([...selected].map(deck => ({ deck })));
+    if (ins.error) console.error(ins.error.message);
+  }
+
+  function showPicker() {
+    document.getElementById('picker')?.remove();
+    const draft = new Set(selected);
+    const overlay = el('div'); overlay.id = 'picker';
+    const box = el('div', 'box');
+    box.append(el('h1', '', 'What do you want to learn?'), el('p', 'sub', 'Pick one or more. You can change this any time.'));
+    const go = el('button', 'go', 'Start learning'); go.type = 'button';
+    const sync = () => { go.disabled = draft.size === 0; };
+    for (const [key, t] of Object.entries(TOPICS)) {
+      const chip = el('button', 'chip'); chip.type = 'button'; chip.dataset.deck = key;
+      chip.setAttribute('aria-pressed', draft.has(key));
+      chip.append(el('strong', '', t.name), el('span', '', t.blurb));
+      chip.onclick = () => {
+        draft.has(key) ? draft.delete(key) : draft.add(key);
+        chip.setAttribute('aria-pressed', draft.has(key));
+        sync();
+      };
+      box.append(chip);
+    }
+    go.onclick = async () => {
+      go.disabled = true;
+      selected = draft;
+      overlay.remove();
+      startFeed();
+      await saveTopics();
+    };
+    box.append(go);
+    overlay.append(box);
+    document.body.append(overlay);
+    sync();
+  }
+
+  async function boot() {
+    if (SUPABASE_URL.includes('YOUR-PROJECT')) return say('Add your Supabase URL and anon key at the top of index.html.');
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) {
+      const { error } = await sb.auth.signInAnonymously();
+      if (error) return say('Sign-in failed: ' + error.message);
+    }
+    const [c, r, t] = await Promise.all([
+      sb.from('cards').select('id, deck, kind, front, back, options'),
+      sb.from('reviews').select('card_id, got_it, created_at'),
+      sb.from('user_topics').select('deck')
+    ]);
+    const failed = c.error || r.error || t.error;
+    if (failed) return say('Couldn’t load data: ' + failed.message + (t.error ? ' (Did you run topics.sql?)' : ''));
+
+    pool = c.data;
+    selected = new Set(t.data.map(row => row.deck).filter(d => TOPICS[d]));
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    for (const row of r.data) {
+      if (row.got_it) mastered.add(row.card_id);
+      if (new Date(row.created_at) >= midnight) todayCount++;
+    }
+    document.getElementById('bar').hidden = false;
+    document.getElementById('topicsBtn').onclick = showPicker;
+    if (selected.size === 0) { feed.replaceChildren(); updateStats(); showPicker(); }
+    else startFeed();
+  }
+  boot();
+</script>
+</body>
+</html>
